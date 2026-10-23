@@ -29,18 +29,44 @@ class NavigatorNode:
         self.sent_count = 0
 
         # TODO: TASK A - Subscribe ke MAP_TOPIC callback on_map dengan QoS transient_local dan reliable
+        map_qos = QoSProfile(
+            depth = 1,
+            reliability = ReliabilityPolicy.RELIABLE,
+            durability = DurabilityPolicy.TRANSIENT_LOCAL
+        )
+        self.map_subscription = node.create_subscription(RaceMap, MAP_TOPIC, self.on_map, map_qos)
 
         # TODO: TASK E - Buat publisher untuk INSTRUCTION_TOPIC dan subscriber untuk STATUS_TOPIC callback on_status
-        self.instruction_publisher = None
+        self.instruction_publisher = node.create_publisher(Instruction, INSTRUCTION_TOPIC ,10)
+
+        self.status_subscription = node.create_subscription(DriverStatus, STATUS_TOPIC, self.on_status, 10)
 
         # TODO: TASK F - Daftarkan parameter INSTRUCTIONS_AHEAD_PARAM bawaan DEFAULT_INSTRUCTIONS_AHEAD dengan on_parameter_change.
-
+        self.node.declare_parameter(INSTRUCTIONS_AHEAD_PARAM, DEFAULT_INSTRUCTIONS_AHEAD)
+        self.node.add_on_set_parameters_callback(self.on_parameter_change)
+            
         self.node.get_logger().info('navigator siap')
 
     # TODO: TASK A
     def on_map(self, msg):
         # Abaikan jika peta sudah ada, atau jika jumlah batunya tidak cocok dengan width*height, tampilkan log error.
         # Jika aman, simpan sebagai GridMap di self.grid, tampilkan log peta diterima, lalu panggil self.plan_route().
+        if self.grid is not None:
+            return
+
+        if len(msg.rocks) != msg.width * msg.height:
+            self.node.get_logger().error('log error')
+            return
+
+        self.grid = GridMap(msg.width, msg.height, msg.rocks, Cell({msg.start_col}, {msg.start_row}), Cell({msg.finish_col}, msg.finish_row))
+
+        rock_count = sum(msg.rocks)
+        self.node.get_logger().info(
+            f'peta diterima: {msg.width}x{msg.height}, {rock_count} batu, '
+            f'start ({msg.start_col}, {msg.start_row})'
+            f'finish ({msg.finish_col}, {msg.finish_row})'
+        )
+        self.plan_route()
         pass
 
     # Provided, do not modify
@@ -57,6 +83,8 @@ class NavigatorNode:
     # TODO: TASK E
     def on_status(self, msg):
         # Simpan laporan di self.last_status, lalu panggil self.send_instructions().
+        self.last_status = msg
+        self.send_instructions()
         pass
 
     def send_instructions(self):
@@ -67,4 +95,14 @@ class NavigatorNode:
     # TODO: TASK F
     def on_parameter_change(self, parameters):
         # Tolak instructions_ahead di luar MIN_INSTRUCTIONS_AHEAD sampai MAX_INSTRUCTIONS_AHEAD, selain itu terima.
-        return SetParametersResult(successful=True)
+        #makes a parameter to accept values from 1 to 5
+        def on_parameter_change(self, parameters):
+            for parameter in parameters:
+                if parameter.name == INSTRUCTIONS_AHEAD_PARAM:
+                    if not MIN_INSTRUCTIONS_AHEAD <= parameter.value <= MAX_INSTRUCTIONS_AHEAD:
+                        return SetParametersResult(
+                            successful=False,
+                            reason='instructions_ahead must be between 1 and 5',
+                        )
+        
+            return SetParametersResult(successful=True)
