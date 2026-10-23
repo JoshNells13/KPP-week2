@@ -85,7 +85,7 @@ def directions_to_instructions(directions):
 
     def add_instruction(distance, turn):
         instruction = Instruction()
-        instruction.id = len(instruction) + 1
+        instruction.id = len(instructions) + 1
         instruction.distance = distance
         instruction.turn = turn
         instructions.append(instruction)
