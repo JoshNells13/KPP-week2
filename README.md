@@ -205,7 +205,7 @@ Note : Di kerangka awal, wasit akan terus mencetak `menunggu miru...`, karena lo
 
 Tulis laporan di template berikut! Tidak perlu terlalu teknis sampai kode atau nama fungsi, cukup jelaskan dengan kalimat sendiri.
 
-Penggunaan AI: Menggunakan bantuan AI (Antigravity) untuk membantu implementasi logika node Miru pada Task 2 (`instruction_queue.py`, `motion.py`, `miru_node.py`), pengujian otomatis, serta penyusunan penjelasan laporan Task 1 dan Task 2.
+Penggunaan AI: Menggunakan bantuan AI (Antigravity) untuk membantu implementasi logika node Miru pada Task 2 (`instruction_queue.py`, `motion.py`, `miru_node.py`), penyempurnaan validasi dan pengiriman instruksi pada Task 3 (`navigator_node.py`, `route.py`), pengujian otomatis, serta penyusunan penjelasan laporan Task 1, Task 2, dan Task 3.
 
 ---
 
@@ -323,7 +323,9 @@ Masukkan screenshot hasil eksekusi program atau proses yang relevan, termasuk ta
 ### Langkah-langkah
 Jelaskan langkah-langkah yang dilakukan.
 
--
+- Membuat *subscriber* pada topik `/race/map` bertipe `rally_interfaces/msg/RaceMap` menggunakan profil QoS `transient_local` dan `reliable` (`depth = 1`) agar peta tetap dapat diterima meskipun node Navigator menyala setelah wasit mempublikasikan peta.
+- Memvalidasi pesan peta yang masuk pada `on_map`: mengabaikan pesan apabila peta sudah pernah diterima sebelumnya (`self.grid is not None`), serta menolak peta dan mencetak log *error* jika ukuran `width` atau `height` tidak valid ($\le 0$) atau panjang daftar `rocks` tidak sesuai dengan `width * height`.
+- Menyimpan data peta yang valid ke dalam objek `GridMap`, mencetak informasi peta yang diterima (ukuran grid, jumlah batu, titik start, dan titik finis), lalu memanggil `plan_route()` dan `send_instructions()`.
 
 ### Screenshot
 Masukkan screenshot hasil eksekusi program atau proses yang relevan.
@@ -333,7 +335,9 @@ Masukkan screenshot hasil eksekusi program atau proses yang relevan.
 ### Langkah-langkah
 Jelaskan langkah-langkah yang dilakukan.
 
--
+- Mengimplementasikan algoritma *Breadth-First Search* (BFS) pada fungsi `find_route` menggunakan struktur antrean `deque` (`pending`) yang dimulai dari titik `grid.start` serta kamus `parent` untuk melacak kotak asal dari setiap kotak yang dikunjungi.
+- Memeriksa terlebih dahulu apakah titik `start` dan `finish` berada di dalam batas grid; jika tidak, fungsi langsung mengembalikan daftar kosong.
+- Selama antrean `pending` belum kosong, mengambil kotak paling depan (`popleft`) dan memeriksa keempat tetangganya secara berurutan (timur, utara, barat, selatan): jika tetangga berada di dalam grid, bukan merupakan batu, dan belum pernah dikunjungi, maka kotak asal dicatat di `parent` dan tetangga tersebut dimasukkan ke antrean, kemudian jalur terpendek direkonstruksi menggunakan `trace_back(parent, grid.finish)`.
 
 ### Screenshot
 Masukkan screenshot hasil eksekusi program atau proses yang relevan.
@@ -343,7 +347,9 @@ Masukkan screenshot hasil eksekusi program atau proses yang relevan.
 ### Langkah-langkah
 Jelaskan langkah-langkah yang dilakukan.
 
--
+- Mengiterasi setiap pasangan kotak berurutan `(route[x], route[x + 1])` pada daftar kotak hasil pencarian rute di fungsi `route_to_directions`.
+- Menghitung selisih kolom (`dx`) dan selisih baris (`dy`) antara kotak tujuan dan kotak saat ini untuk menentukan arah gerak setiap langkah.
+- Memetakan selisih koordinat menjadi kode arah sesuai spesifikasi: `0` untuk timur (`dx == 1`), `1` untuk utara (`dy == 1`), `2` untuk barat (`dx == -1`), dan `3` untuk selatan (`dy == -1`), sehingga rute sepanjang $N$ kotak menghasilkan $N - 1$ arah langkah.
 
 ### Screenshot
 Masukkan screenshot hasil eksekusi program atau proses yang relevan.
@@ -353,7 +359,9 @@ Masukkan screenshot hasil eksekusi program atau proses yang relevan.
 ### Langkah-langkah
 Jelaskan langkah-langkah yang dilakukan.
 
--
+- Memeriksa arah langkah pertama terhadap arah hadap awal Miru (`EAST` / timur): jika langkah pertama tidak menghadap ke timur, ditambahkan instruksi awal dengan jarak `0` untuk berbelok terlebih dahulu (`TURN_LEFT` jika ke utara, `TURN_RIGHT` jika ke selatan, atau dua kali instruksi `TURN_LEFT` berjarak `0` jika berputar balik 180° ke barat).
+- Mengelompokkan langkah-langkah yang memiliki arah sama secara berturut-turut menjadi segmen `(direction, distance)` agar gerakan lurus yang berkesinambungan digabung menjadi satu instruksi maju.
+- Mengonversi setiap segmen menjadi pesan `Instruction` dengan `id` berurutan mulai dari 1: segmen terakhir ditutup dengan `TURN_NONE`, sedangkan segmen lainnya ditutup dengan arah belokan menuju segmen berikutnya (`TURN_LEFT`, `TURN_RIGHT`, atau dua belokan kiri untuk putar balik 180° dengan instruksi kedua berjarak `0`).
 
 ### Screenshot
 Masukkan screenshot hasil eksekusi program atau proses yang relevan.
@@ -363,7 +371,9 @@ Masukkan screenshot hasil eksekusi program atau proses yang relevan.
 ### Langkah-langkah
 Jelaskan langkah-langkah yang dilakukan.
 
--
+- Membuat *publisher* pada topik `/navigator/instruction` bertipe `rally_interfaces/msg/Instruction` dan *subscriber* pada topik `/miru/status` bertipe `rally_interfaces/msg/DriverStatus` yang menyimpan laporan terbaru ke `self.last_status` dan memanggil `send_instructions()`.
+- Memastikan di dalam `send_instructions()` bahwa pengiriman hanya dilakukan apabila daftar instruksi rute sudah tersedia, Miru sudah pernah mengirim laporan status minimal satu kali, dan sudah ada *subscriber* yang mendengarkan topik instruksi (`get_subscription_count() > 0`).
+- Mengirimkan instruksi secara berurutan mulai dari indeks `self.sent_count` hingga batas `min(len(self.instructions), self.last_status.done_id + ahead)`, menaikkan `self.sent_count` agar setiap instruksi hanya dikirim satu kali, serta mencetak log setiap instruksi yang dikirim.
 
 ### Screenshot
 Masukkan screenshot hasil eksekusi program atau proses yang relevan.
@@ -373,7 +383,9 @@ Masukkan screenshot hasil eksekusi program atau proses yang relevan.
 ### Langkah-langkah
 Jelaskan langkah-langkah yang dilakukan.
 
--
+- Mendeklarasikan parameter `instructions_ahead` pada node Navigator dengan nilai bawaan `DEFAULT_INSTRUCTIONS_AHEAD` (2) serta mendaftarkan *callback* validasi parameter `on_parameter_change`.
+- Memvalidasi setiap perubahan parameter `instructions_ahead` agar hanya menerima nilai bilangan bulat (`int` dan bukan `bool`) di dalam rentang `MIN_INSTRUCTIONS_AHEAD` (1) hingga `MAX_INSTRUCTIONS_AHEAD` (5), serta menolak nilai di luar rentang tersebut dengan `SetParametersResult(successful=False)`.
+- Menggunakan nilai parameter `instructions_ahead` secara dinamis di dalam `send_instructions()` untuk menentukan jumlah instruksi yang harus dijaga di depan `done_id` milik Miru.
 
 ### Screenshot
 Masukkan screenshot hasil eksekusi program atau proses yang relevan.
@@ -383,7 +395,9 @@ Masukkan screenshot hasil eksekusi program atau proses yang relevan.
 ### Langkah-langkah
 Jelaskan langkah-langkah yang dilakukan.
 
--
+- Mengimplementasikan fungsi pencarian rute menggunakan algoritma *Depth-First Search* (DFS) yang menelusuri tetangga hingga cabang terdalam terlebih dahulu dengan urutan pengecekan timur, utara, barat, dan selatan.
+- Membandingkan hasil pencarian BFS dan DFS pada peta untuk melihat perbedaan panjang rute yang dihasilkan, jumlah kotak yang dikunjungi sebelum menemukan titik finis, serta waktu tempuh lomba.
+- Mengamati bahwa BFS selalu menjamin rute terpendek karena menelusuri kotak lapis demi lapis berdasarkan jarak langkah dari titik start, sedangkan DFS menelusuri satu cabang sampai mentok terlebih dahulu sehingga sering menghasilkan rute yang berliku dan lebih panjang (waktu lomba lebih lama) meskipun terkadang mengunjungi lebih sedikit kotak sebelum tidak sengaja menemukan titik finis.
 
 ### Screenshot
 Masukkan screenshot hasil eksekusi program atau proses yang relevan, termasuk tabel hasil ukur.
